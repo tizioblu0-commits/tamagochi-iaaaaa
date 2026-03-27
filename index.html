@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Creatura IA – Tamagotchi Emotivo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+    }
+    #game {
+      width: 600px;
+      max-width: 100%;
+      background: #020617;
+      border-radius: 10px;
+      padding: 16px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.6);
+    }
+    h1 {
+      margin-top: 0;
+      text-align: center;
+    }
+    #stats {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 14px;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    #creature {
+      text-align: center;
+      margin: 10px 0 16px;
+    }
+    #creature img {
+      image-rendering: pixelated;
+      width: 96px;
+      height: 96px;
+    }
+    #buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+    button {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      background: #3b82f6;
+      color: white;
+      font-size: 14px;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    #log {
+      height: 220px;
+      overflow-y: auto;
+      background: #020617;
+      border: 1px solid #1f2937;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 13px;
+    }
+    .log-entry {
+      margin-bottom: 4px;
+    }
+    .log-system { color: #9ca3af; font-style: italic; }
+    .log-creature { color: #facc15; }
+    .log-player { color: #38bdf8; }
+    #moodLabel {
+      margin-top: 6px;
+      font-size: 13px;
+      color: #9ca3af;
+    }
+  </style>
+</head>
+<body>
+  <div id="game">
+    <h1>Creatura IA – Tamagotchi Emotivo</h1>
+
+    <div id="stats">
+      <div>Affetto: <span id="affection">50</span>/100</div>
+      <div>Energia: <span id="energy">50</span>/100</div>
+      <div>Fiducia: <span id="trust">50</span>/100</div>
+      <div>Malattia: <span id="illness">Sana</span></div>
+    </div>
+
+    <div id="creature">
+      <img id="catSprite" src="https://i.imgur.com/3XjzG4i.png">
+    </div>
+
+    <div id="buttons">
+      <button data-action="pet">Coccola</button>
+      <button data-action="feed">Dai da mangiare</button>
+      <button data-action="play">Gioca</button>
+      <button data-action="scold">Sgrida</button>
+      <button data-action="ignore">Ignora</button>
+      <button id="inventoryBtn">Inventario</button>
+    </div>
+
+    <div id="log"></div>
+    <div id="moodLabel"></div>
+
+    <div id="inventoryWindow" style="
+      display:none;
+      background:#1e293b;
+      padding:10px;
+      border-radius:8px;
+      margin-top:10px;
+      border:1px solid #334155;
+    ">
+      <h3>Inventario</h3>
+      <div id="inventoryList"></div>
+    </div>
+  </div>
+
+  <script>
+    const affectionEl = document.getElementById('affection');
+    const energyEl = document.getElementById('energy');
+    const trustEl = document.getElementById('trust');
+    const illnessEl = document.getElementById('illness');
+    const logEl = document.getElementById('log');
+    const moodLabelEl = document.getElementById('moodLabel');
+    const catSprite = document.getElementById("catSprite");
+    const buttons = document.querySelectorAll('#buttons button');
+
+    let affection = 50;
+    let energy = 50;
+    let trust = 50;
+
+    let inventory = [];
+    let illness = null; // "Raffreddore", "Febbre", "Stanchezza"
+
+    const SPRITES = {
+      happy:   "https://png.pngtree.com/png-clipart/20230927/original/pngtree-happy-cat-smiling-cat-png-image_13141546.png",
+      neutral: "https://tse3.mm.bing.net/th/id/OIP.HTUGyEB1YhDuLCAOc6TL4gHaE8?rs=1&pid=ImgDetMain&o=7&rm=3",
+      sad:     "https://wallpapers.com/images/hd/sad-cat-pictures-ttkvc62uupzpfpqe.jpg",
+      angry:   "https://tse1.mm.bing.net/th/id/OIP.tqjPT_ykc9ptSUw2y0sc6gHaHn?rs=1&pid=ImgDetMain&o=7&rm=3",
+      dead:    "https://img.freepik.com/premium-vector/top-quality-emoticon-skull-with-crossed-bones-vector-emoji-face-emoji-popular-element_686498-2646.jpg?w=1380"
+    };
+
+    function clamp(v) {
+      return Math.max(0, Math.min(100, v));
+    }
+
+    function addLog(text, type = "system") {
+      const div = document.createElement('div');
+      div.classList.add('log-entry');
+      if (type === "system") div.classList.add('log-system');
+      if (type === "creature") div.classList.add('log-creature');
+      if (type === "player") div.classList.add('log-player');
+      div.textContent = text;
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function updateCatSprite() {
+      const avg = (affection + energy + trust) / 3;
+
+      if (avg > 75) catSprite.src = SPRITES.happy;
+      else if (avg > 50) catSprite.src = SPRITES.neutral;
+      else if (avg > 30) catSprite.src = SPRITES.sad;
+      else if (avg > 15) catSprite.src = SPRITES.angry;
+      else catSprite.src = SPRITES.dead;
+    }
+
+    function updateUI() {
+      affectionEl.textContent = affection;
+      energyEl.textContent = energy;
+      trustEl.textContent = trust;
+      illnessEl.textContent = illness ? illness : "Sana";
+
+      const avg = (affection + energy + trust) / 3;
+
+      if (avg > 75) moodLabelEl.textContent = "Personalità: affettuosa e fiduciosa.";
+      else if (avg > 50) moodLabelEl.textContent = "Personalità: tranquilla.";
+      else if (avg > 30) moodLabelEl.textContent = "Personalità: triste.";
+      else if (avg > 15) moodLabelEl.textContent = "Personalità: irritata.";
+      else moodLabelEl.textContent = "Personalità: disperata.";
+    }
+
+    function creatureSpeak(context) {
+      const avg = (affection + trust) / 2;
+      let lines = [];
+
+      if (avg > 70) {
+        if (context === "pet") lines = ["Mi piace quando fai così!"];
+        if (context === "feed") lines = ["Grazie, sapevo che ti importava!"];
+        if (context === "play") lines = ["Mi sto divertendo un sacco!"];
+        if (context === "scold") lines = ["Mi dispiace… farò meglio."];
+        if (context === "ignore") lines = ["Ti aspettavo…"];
+      } else if (avg > 40) {
+        if (context === "pet") lines = ["Mh… ok."];
+        if (context === "feed") lines = ["Grazie."];
+        if (context === "play") lines = ["Va bene, giochiamo."];
+        if (context === "scold") lines = ["Capito."];
+        if (context === "ignore") lines = ["Sei occupato?"];
+      } else {
+        if (context === "pet") lines = ["Perché ora fai il carino?"];
+        if (context === "feed") lines = ["Mangio solo perché devo."];
+        if (context === "play") lines = ["Non ho voglia."];
+        if (context === "scold") lines = ["Non sei il mio padrone."];
+        if (context === "ignore") lines = ["Lo sapevo che mi lasciavi solo."];
+      }
+
+      addLog("Creatura: " + lines[Math.floor(Math.random() * lines.length)], "creature");
+    }
+
+    function applyAction(action) {
+      if (action === "pet") {
+        affection += 8; trust += 4; energy += 2;
+        addLog("Tu: coccoli la creatura.", "player");
+        creatureSpeak("pet");
+      }
+      if (action === "feed") {
+        affection += 4; energy += 10; trust += 2;
+        addLog("Tu: dai da mangiare.", "player");
+        creatureSpeak("feed");
+      }
+      if (action === "play") {
+        affection += 6; energy -= 8; trust += 3;
+        addLog("Tu: giochi con la creatura.", "player");
+        creatureSpeak("play");
+      }
+      if (action === "scold") {
+        affection -= 10; trust -= 12; energy -= 2;
+        addLog("Tu: sgridi la creatura.", "player");
+        creatureSpeak("scold");
+      }
+      if (action === "ignore") {
+        affection -= 6; trust -= 8; energy += 1;
+        addLog("Tu: ignori la creatura.", "player");
+        creatureSpeak("ignore");
+      }
+
+      affection--; trust--; energy--;
+
+      affection = clamp(affection);
+      trust = clamp(trust);
+      energy = clamp(energy);
+
+      updateCatSprite();
+      updateUI();
+    }
+
+    // MALATTIE
+    function maybeGetSick() {
+      if (illness) return;
+      if (Math.random() < 0.10) {
+        const types = ["Raffreddore", "Febbre", "Stanchezza"];
+        illness = types[Math.floor(Math.random() * types.length)];
+        addLog("La creatura si è ammalata: " + illness, "system");
+      }
+    }
+
+    function illnessEffects() {
+      if (!illness) return;
+
+      if (illness === "Raffreddore") {
+        energy -= 3;
+      }
+      if (illness === "Febbre") {
+        energy -= 5;
+        affection -= 2;
+      }
+      if (illness === "Stanchezza") {
+        energy -= 4;
+      }
+    }
+
+    // INVENTARIO
+    function updateInventoryWindow() {
+      const list = document.getElementById("inventoryList");
+      list.innerHTML = "";
+
+      if (inventory.length === 0) {
+        list.textContent = "Inventario vuoto.";
+        return;
+      }
+
+      inventory.forEach((item, index) => {
+        const div = document.createElement("div");
+        div.style.marginBottom = "6px";
+
+        const btn = document.createElement("button");
+        btn.textContent = "Usa " + item;
+        btn.style.marginLeft = "10px";
+
+        btn.onclick = () => useItem(index);
+
+        div.textContent = item;
+        div.appendChild(btn);
+        list.appendChild(div);
+      });
+    }
+
+    function useItem(index) {
+      const item = inventory[index];
+
+      if (item === "Snack") {
+        energy = clamp(energy + 15);
+        affection = clamp(affection + 5);
+        addLog("Hai dato uno snack alla creatura!", "player");
+      }
+
+      if (item === "Giocattolo") {
+        trust = clamp(trust + 10);
+        affection = clamp(affection + 8);
+        addLog("Hai usato un giocattolo!", "player");
+      }
+
+      if (item === "Medicina") {
+        illness = null;
+        addLog("Hai curato la creatura!", "player");
+      }
+
+      inventory.splice(index, 1);
+      updateInventoryWindow();
+      updateUI();
+    }
+
+    document.getElementById("inventoryBtn").onclick = () => {
+      const win = document.getElementById("inventoryWindow");
+      win.style.display = win.style.display === "none" ? "block" : "none";
+      updateInventoryWindow();
+    };
+
+    // EVENTI AUTOMATICI
+    function triggerRandomEvent() {
+      const events = [
+        {
+          text: "La creatura ha trovato un giocattolo!",
+          affection: +5, energy: +3, trust: +2,
+          item: "Giocattolo"
+        },
+        {
+          text: "La creatura ha trovato uno snack!",
+          affection: +3, energy: +5, trust: +1,
+          item: "Snack"
+        },
+        {
+          text: "La creatura ha trovato una medicina.",
+          affection: +1, energy: +1, trust: +1,
+          item: "Medicina"
+        }
+      ];
+
+      const event = events[Math.floor(Math.random() * events.length)];
+
+      affection += event.affection;
+      energy += event.energy;
+      trust += event.trust;
+
+      affection = clamp(affection);
+      energy = clamp(energy);
+      trust = clamp(trust);
+
+      addLog("Evento: " + event.text, "system");
+
+      if (event.item) {
+        inventory.push(event.item);
+        addLog("Hai ottenuto: " + event.item, "system");
+      }
+
+      updateCatSprite();
+      updateUI();
+    }
+
+    // STATISTICHE AUTOMATICHE
+    setInterval(() => {
+      affection -= 1;
+      trust -= 1;
+      energy -= 2;
+
+      maybeGetSick();
+      illnessEffects();
+
+      affection = clamp(affection);
+      trust = clamp(trust);
+      energy = clamp(energy);
+
+      updateCatSprite();
+      updateUI();
+    }, 3000);
+
+    setInterval(triggerRandomEvent, 15000);
+
+    buttons.forEach(btn => {
+      const action = btn.dataset.action;
+      if (!action) return;
+      btn.addEventListener('click', () => applyAction(action));
+    });
+
+    addLog("Sistema: È nata una piccola creatura IA.", "system");
+    addLog("Sistema: Le tue azioni plasmeranno la sua personalità.", "system");
+    updateUI();
+  </script>
+</body>
+</html>
